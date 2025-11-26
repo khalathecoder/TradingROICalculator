@@ -1,0 +1,97 @@
+﻿@page "/trading-roi"
+@rendermode InteractiveServer
+
+<h3>Trading ROI Calculator</h3>
+
+<div class="card p-4 mt-3">
+    <div class="mb-3">
+        <label class="form-label fw-bold">Mode</label>
+        <select class="form-select" @bind="_mode">
+            <option value="Options">Options</option>
+            <option value="Futures">Futures</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Instrument</label>
+        <select class="form-select" @bind="_selectedInstrument">
+            <option value="GLD">GLD (Options)</option>
+            <option value="MGC">MGC (Micro Gold Futures)</option>
+        </select>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Entry Price</label>
+            <input class="form-control" type="number" step="0.01" @bind="_entry" />
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Exit Price</label>
+            <input class="form-control" type="number" step="0.01" @bind="_exit" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Contracts</label>
+        <input class="form-control" type="number" @bind="_contracts" />
+    </div>
+
+    <button class="btn btn-primary" @onclick="Calculate">Calculate</button>
+
+    @if (_calculated)
+    {
+        <div class="alert alert-info mt-4">
+            <p><strong>Mode:</strong> @_mode</p>
+            <p><strong>Instrument:</strong> @_selectedInstrument</p>
+            <p><strong>Profit/Loss:</strong> @_profit.ToString("C")</p>
+            <p><strong>ROI:</strong> @_roi.ToString("0.00") %</p>
+        </div>
+    }
+</div>
+
+@code {
+    private string _mode = "Options";
+    private string _selectedInstrument = "GLD";
+
+    private decimal _entry;
+    private decimal _exit;
+    private int _contracts = 1;
+
+    private bool _calculated;
+    private decimal _profit;
+    private decimal _roi;
+
+    private void Calculate()
+    {
+        _calculated = false;
+
+        if (_contracts <= 0 || _entry <= 0)
+            return;
+
+        if (_mode == "Options")
+        {
+            // GLD options: 100x contract multiplier
+            decimal multiplier = 100m;
+            decimal cost = _entry * multiplier * _contracts;
+            decimal value = _exit * multiplier * _contracts;
+
+            _profit = value - cost;
+            _roi = cost == 0 ? 0 : (_profit / cost) * 100m;
+        }
+        else
+        {
+            // MGC futures: $10 per point by default
+            decimal dollarPerPoint = 10m;
+            decimal pointMove = _exit - _entry;
+
+            _profit = pointMove * dollarPerPoint * _contracts;
+
+            // Simple assumed capital per contract (e.g. margin)
+            decimal capitalUsed = 2000m * _contracts;
+            _roi = capitalUsed == 0 ? 0 : (_profit / capitalUsed) * 100m;
+        }
+
+        _calculated = true;
+    }
+}
