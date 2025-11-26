@@ -1,97 +1,174 @@
 ﻿@page "/trading-roi"
 @rendermode InteractiveServer
 
-<h3>Trading ROI Calculator</h3>
+<h3 class="text-center mb-3">SurePath Trading – Futures Risk Per Trade</h3>
 
-<div class="card p-4 mt-3">
-    <div class="mb-3">
-        <label class="form-label fw-bold">Mode</label>
-        <select class="form-select" @bind="_mode">
-            <option value="Options">Options</option>
-            <option value="Futures">Futures</option>
-        </select>
+<div class="card p-4">
+
+    <!-- Trade meta -->
+    <div class="row">
+        <div class="col-md-3 mb-3">
+            <label class="form-label fw-bold">Trade Date</label>
+            <InputDate class="form-control" @bind-Value="_tradeDate" />
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <label class="form-label fw-bold">Symbol</label>
+            <InputText class="form-control" @bind-Value="_symbol" />
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <label class="form-label fw-bold">Direction</label>
+            <InputSelect class="form-select" @bind-Value="_direction">
+                <option>Long</option>
+                <option>Short</option>
+            </InputSelect>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <label class="form-label fw-bold">Planned Contracts</label>
+            <InputNumber class="form-control" @bind-Value="_manualContracts" />
+        </div>
     </div>
 
-    <div class="mb-3">
-        <label class="form-label fw-bold">Instrument</label>
-        <select class="form-select" @bind="_selectedInstrument">
-            <option value="GLD">GLD (Options)</option>
-            <option value="MGC">MGC (Micro Gold Futures)</option>
-        </select>
-    </div>
-
+    <!-- Account + risk -->
     <div class="row">
         <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Entry Price</label>
-            <input class="form-control" type="number" step="0.01" @bind="_entry" />
+            <label class="form-label fw-bold">Account Size ($)</label>
+            <InputNumber class="form-control" @bind-Value="_accountSize" />
         </div>
-
         <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Exit Price</label>
-            <input class="form-control" type="number" step="0.01" @bind="_exit" />
+            <label class="form-label fw-bold">Risk per Trade (%)</label>
+            <InputNumber class="form-control" @bind-Value="_riskPercent" />
         </div>
     </div>
 
-    <div class="mb-3">
-        <label class="form-label fw-bold">Contracts</label>
-        <input class="form-control" type="number" @bind="_contracts" />
+    <!-- Price + instrument -->
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-bold">Entry Price</label>
+            <InputNumber class="form-control" @bind-Value="_entryPrice" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-bold">Stop Price</label>
+            <InputNumber class="form-control" @bind-Value="_stopPrice" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-bold">$ per Point (tick value)</label>
+            <InputNumber class="form-control" @bind-Value="_dollarPerPoint" />
+            <div class="form-text">MGC default ≈ 10.00</div>
+        </div>
     </div>
 
-    <button class="btn btn-primary" @onclick="Calculate">Calculate</button>
+    <button class="btn btn-primary" @onclick="CalculateRisk">Calculate Risk</button>
 
-    @if (_calculated)
+    @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <div class="alert alert-info mt-4">
-            <p><strong>Mode:</strong> @_mode</p>
-            <p><strong>Instrument:</strong> @_selectedInstrument</p>
-            <p><strong>Profit/Loss:</strong> @_profit.ToString("C")</p>
-            <p><strong>ROI:</strong> @_roi.ToString("0.00") %</p>
+        <div class="alert alert-danger mt-3">
+            @_error
+        </div>
+    }
+
+    @if (_hasResult)
+    {
+        <div class="alert alert-info mt-3">
+            <p><strong>Date:</strong> @_tradeDate.ToShortDateString()</p>
+            <p><strong>Symbol:</strong> @_symbol</p>
+            <p><strong>Direction:</strong> @_direction</p>
+            <hr />
+            <p><strong>Account Size:</strong> @_accountSize.ToString("C")</p>
+            <p><strong>Risk %:</strong> @_riskPercent.ToString("0.##") %</p>
+            <p><strong>Max Dollar Risk Allowed:</strong> @_maxRiskDollar.ToString("C")</p>
+            <p><strong>Risk per Contract:</strong> @_riskPerContract.ToString("C")</p>
+            <p><strong>Suggested Contracts:</strong> @_suggestedContracts</p>
+
+            @if (_manualContracts > 0)
+            {
+                <p><strong>Total Risk (@_manualContracts contracts):</strong> @_totalRiskManual.ToString("C")</p>
+            }
+
+            <p><strong>Total Risk (suggested size):</strong> @_totalRiskSuggested.ToString("C")</p>
         </div>
     }
 </div>
 
 @code {
-    private string _mode = "Options";
-    private string _selectedInstrument = "GLD";
+    private DateTime _tradeDate = DateTime.Today;
+    private string _symbol = "MGC";
+    private string _direction = "Long";
 
-    private decimal _entry;
-    private decimal _exit;
-    private int _contracts = 1;
+    private decimal _accountSize = 10000m;
+    private decimal _riskPercent = 1m;
 
-    private bool _calculated;
-    private decimal _profit;
-    private decimal _roi;
+    private decimal _entryPrice;
+    private decimal _stopPrice;
+    private decimal _dollarPerPoint = 10m; // default MGC
 
-    private void Calculate()
+    private int _manualContracts = 0;
+
+    private string? _error;
+    private bool _hasResult;
+
+    private decimal _maxRiskDollar;
+    private decimal _riskPerContract;
+    private int _suggestedContracts;
+    private decimal _totalRiskSuggested;
+    private decimal _totalRiskManual;
+
+    private void CalculateRisk()
     {
-        _calculated = false;
+        _error = null;
+        _hasResult = false;
 
-        if (_contracts <= 0 || _entry <= 0)
+        if (_accountSize <= 0 || _riskPercent <= 0)
+        {
+            _error = "Account size and risk % must be greater than zero.";
             return;
-
-        if (_mode == "Options")
-        {
-            // GLD options: 100x contract multiplier
-            decimal multiplier = 100m;
-            decimal cost = _entry * multiplier * _contracts;
-            decimal value = _exit * multiplier * _contracts;
-
-            _profit = value - cost;
-            _roi = cost == 0 ? 0 : (_profit / cost) * 100m;
-        }
-        else
-        {
-            // MGC futures: $10 per point by default
-            decimal dollarPerPoint = 10m;
-            decimal pointMove = _exit - _entry;
-
-            _profit = pointMove * dollarPerPoint * _contracts;
-
-            // Simple assumed capital per contract (e.g. margin)
-            decimal capitalUsed = 2000m * _contracts;
-            _roi = capitalUsed == 0 ? 0 : (_profit / capitalUsed) * 100m;
         }
 
-        _calculated = true;
+        if (_entryPrice <= 0 || _stopPrice <= 0)
+        {
+            _error = "Entry and stop prices must be greater than zero.";
+            return;
+        }
+
+        if (_dollarPerPoint <= 0)
+        {
+            _error = "$ per point must be greater than zero.";
+            return;
+        }
+
+        var priceDiff = Math.Abs(_entryPrice - _stopPrice);
+        if (priceDiff <= 0)
+        {
+            _error = "Entry and stop cannot be the same.";
+            return;
+        }
+
+        _maxRiskDollar = _accountSize * (_riskPercent / 100m);
+        _riskPerContract = priceDiff * _dollarPerPoint;
+
+        if (_riskPerContract <= 0)
+        {
+            _error = "Risk per contract could not be calculated.";
+            return;
+        }
+
+        _suggestedContracts = (int)Math.Floor(_maxRiskDollar / _riskPerContract);
+        if (_suggestedContracts <= 0)
+        {
+            _error = "Risk too high for even 1 contract with this stop.";
+            return;
+        }
+
+        _totalRiskSuggested = _suggestedContracts * _riskPerContract;
+
+        _totalRiskManual = 0;
+        if (_manualContracts > 0)
+        {
+            _totalRiskManual = _manualContracts * _riskPerContract;
+        }
+
+        _hasResult = true;
     }
 }
