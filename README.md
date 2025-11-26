@@ -36,8 +36,6 @@ These notes give reviewers insight that this project wasn’t thrown together �
 ---
 
 ## 📌 Upcoming Features (Roadmap)
-These help you signal forward-thinking + ongoing development:
-
 - **Rich-text editor for journal notes** (bold, colors, lists, embedded HTML)
 - **Optional demo authentication** (single demo user for showcasing the UI)
 - **Persist journal entries** (EF Core → local DB or SQLite)
