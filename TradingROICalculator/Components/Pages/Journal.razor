@@ -7,8 +7,27 @@
 
 <div class="card p-4 mb-4">
     <div class="mb-3">
-        <label class="form-label fw-bold">Notes</label>
+        <div class="fw-bold mb-1">Setup (optional)</div>
+        <label class="me-3"><input type="radio" name="setup" value="Breakout" @onchange="e => _setup = e.Value?.ToString()" checked="@(_setup == "Failed 2u")" /> Breakout</label>
+        <label class="me-3"><input type="radio" name="setup" value="Reversal" @onchange="e => _setup = e.Value?.ToString()" checked="@(_setup == "Failed 2d")" /> Reversal</label>
+        <label class="me-3"><input type="radio" name="setup" value="Pullback" @onchange="e => _setup = e.Value?.ToString()" checked="@(_setup == "Pullback")" /> Pullback</label>
+    </div>
 
+    <div class="mb-3">
+        <div class="fw-bold mb-1">Direction (optional)</div>
+        <label class="me-3"><input type="radio" name="direction" value="Long" @onchange="e => _direction = e.Value?.ToString()" checked="@(_direction == "Long")" /> Long</label>
+        <label class="me-3"><input type="radio" name="direction" value="Short" @onchange="e => _direction = e.Value?.ToString()" checked="@(_direction == "Short")" /> Short</label>
+    </div>
+
+    <div class="mb-3">
+        <div class="fw-bold mb-1">Result (optional)</div>
+        <label class="me-3"><input type="radio" name="result" value="Win" @onchange="e => _result = e.Value?.ToString()" checked="@(_result == "Win")" /> Win</label>
+        <label class="me-3"><input type="radio" name="result" value="Loss" @onchange="e => _result = e.Value?.ToString()" checked="@(_result == "Loss")" /> Loss</label>
+        <label class="me-3"><input type="radio" name="result" value="BE" @onchange="e => _result = e.Value?.ToString()" checked="@(_result == "BE")" /> BE</label>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label fw-bold">Notes</label>
         <textarea class="form-control"
                   rows="10"
                   @bind="_notes"
@@ -79,6 +98,11 @@ else
         "image/webp"
     };
 
+    private string? _setup;
+    private string? _direction;
+    private string? _result;
+
+
     private const long MaxScreenshotBytes = 4 * 1024 * 1024; // 4 MB
 
     private async Task HandleScreenshotUpload(InputFileChangeEventArgs e)
@@ -113,11 +137,12 @@ else
         {
             CreatedUtc = DateTime.UtcNow,
             Notes = _notes.Trim(),
-            ScreenshotDataUrl = _screenshotDataUrl
+            ScreenshotDataUrl = _screenshotDataUrl,
+            Setup = _setup,
+            Direction = _direction,
+            Result = _result,
+            UserId = "local"
         });
-
-        _notes = "";
-        _screenshotDataUrl = null;
     }
 
 }
