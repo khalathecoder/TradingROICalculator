@@ -1,5 +1,7 @@
 ﻿@page "/journal"
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using Microsoft.AspNetCore.Components.Forms
+@using TradingROICalculator.Models
 
 <h3 class="text-center mb-3">SurePath Trading – Journal</h3>
 
@@ -14,6 +16,24 @@
         </textarea>
     </div>
 
+    <div class="mb-3">
+        <label class="form-label fw-bold">Screenshot (optional)</label>
+        <InputFile OnChange="HandleScreenshotUpload" accept="image/*" />
+        <div class="form-text">Upload a TradingView screenshot for this entry.</div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_screenshotDataUrl))
+    {
+        <div class="mb-3">
+            <div class="fw-bold">Preview:</div>
+            <img src="@_screenshotDataUrl"
+                 style="max-width: 100%; border: 1px solid #ccc; border-radius: 6px;" />
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-2" @onclick="ClearScreenshot">
+                Remove screenshot
+            </button>
+        </div>
+    }
+
     <button type="button" class="btn btn-primary" @onclick="AddEntry">
         Add Entry
     </button>
@@ -26,7 +46,17 @@
         {
             <div class="list-group-item mb-2">
                 <small class="text-muted">@e.CreatedUtc.ToLocalTime().ToString("g")</small>
-                <p class="mb-0">@e.Notes</p>
+
+                @if (!string.IsNullOrWhiteSpace(e.Notes))
+                {
+                    <p class="mb-2">@e.Notes</p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(e.ScreenshotDataUrl))
+                {
+                    <img src="@e.ScreenshotDataUrl"
+                         style="max-width: 100%; border: 1px solid #ccc; border-radius: 6px;" />
+                }
             </div>
         }
     </div>
@@ -38,24 +68,56 @@ else
 
 @code {
     private string _notes = "";
-    private readonly List<Entry> _entries = new();
+    private string? _screenshotDataUrl;
+
+    private readonly List<JournalEntry> _entries = new();
+
+    private static readonly string[] AllowedImageTypes =
+    {
+        "image/png",
+        "image/jpeg",
+        "image/webp"
+    };
+
+    private const long MaxScreenshotBytes = 4 * 1024 * 1024; // 4 MB
+
+    private async Task HandleScreenshotUpload(InputFileChangeEventArgs e)
+    {
+        _screenshotDataUrl = null;
+
+        var file = e.File;
+        if (file is null) return;
+
+        // size limit
+        if (file.Size > MaxScreenshotBytes) return;
+
+        // type allowlist
+        if (!AllowedImageTypes.Contains(file.ContentType)) return;
+
+        using var stream = file.OpenReadStream(MaxScreenshotBytes);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+
+        var bytes = ms.ToArray();
+        _screenshotDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+    }
+
+    private void ClearScreenshot() => _screenshotDataUrl = null;
 
     private void AddEntry()
     {
-        if (string.IsNullOrWhiteSpace(_notes)) return;
+        if (string.IsNullOrWhiteSpace(_notes) && string.IsNullOrWhiteSpace(_screenshotDataUrl))
+            return;
 
-        _entries.Add(new Entry
+        _entries.Add(new JournalEntry
         {
             CreatedUtc = DateTime.UtcNow,
-            Notes = _notes.Trim()
+            Notes = _notes.Trim(),
+            ScreenshotDataUrl = _screenshotDataUrl
         });
 
         _notes = "";
+        _screenshotDataUrl = null;
     }
 
-    private class Entry
-    {
-        public DateTime CreatedUtc { get; set; }
-        public string Notes { get; set; } = "";
-    }
 }
