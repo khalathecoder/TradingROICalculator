@@ -1,59 +1,32 @@
 ﻿@page "/journal"
-@rendermode InteractiveServer
-@using System.ComponentModel.DataAnnotations
-@using Microsoft.AspNetCore.Components.Forms
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 <h3 class="text-center mb-3">SurePath Trading – Journal</h3>
 
 <div class="card p-4 mb-4">
-    <EditForm Model="_newEntry" OnValidSubmit="AddEntry">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
+    <div class="mb-3">
+        <label class="form-label fw-bold">Notes</label>
 
-        <div class="mb-3">
-            <label class="form-label fw-bold">Notes</label>
-            <InputTextArea class="form-control"
-                           rows="4"
-                           @bind-Value="_newEntry.Notes" />
-        </div>
+        <textarea class="form-control"
+                  rows="10"
+                  @bind="_notes"
+                  @bind:event="oninput">
+        </textarea>
+    </div>
 
-        <div class="mb-3">
-            <label class="form-label fw-bold">Screenshot (optional)</label>
-            <InputFile OnChange="HandleScreenshotUpload" accept="image/*" />
-            <div class="form-text">Upload a TradingView screenshot for this note.</div>
-        </div>
-
-        @if (_screenshotDataUrl is not null)
-        {
-            <div class="mt-3 mb-3">
-                <span class="fw-bold">Screenshot preview:</span>
-                <div class="mt-2">
-                    <img src="@_screenshotDataUrl"
-                         style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px;" />
-                </div>
-            </div>
-        }
-
-        <button type="submit" class="btn btn-primary">Add Note</button>
-    </EditForm>
+    <button type="button" class="btn btn-primary" @onclick="AddEntry">
+        Add Entry
+    </button>
 </div>
 
-@if (_entries.Any())
+@if (_entries.Count > 0)
 {
     <div class="list-group">
-        @foreach (var e in _entries.OrderByDescending(e => e.CreatedUtc))
+        @foreach (var e in _entries.OrderByDescending(x => x.CreatedUtc))
         {
             <div class="list-group-item mb-2">
-                <div class="d-flex justify-content-between">
-                    <small class="text-muted">@e.CreatedUtc.ToLocalTime().ToString("g")</small>
-                </div>
-                <p class="mb-2">@e.Notes</p>
-
-                @if (!string.IsNullOrEmpty(e.ScreenshotDataUrl))
-                {
-                    <img src="@e.ScreenshotDataUrl"
-                         style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px;" />
-                }
+                <small class="text-muted">@e.CreatedUtc.ToLocalTime().ToString("g")</small>
+                <p class="mb-0">@e.Notes</p>
             </div>
         }
     </div>
@@ -64,92 +37,25 @@ else
 }
 
 @code {
-    private JournalInput _newEntry = new();
-    private readonly List<JournalEntry> _entries = new();
-
-    private string? _screenshotDataUrl;
-
-    private static readonly string[] AllowedImageTypes =
-    {
-        "image/png",
-        "image/jpeg",
-        "image/webp"
-    };
-
-    private const long MaxScreenshotBytes = 4 * 1024 * 1024; // 4 MB
-
-    private async Task HandleScreenshotUpload(InputFileChangeEventArgs e)
-    {
-        _screenshotDataUrl = null;
-
-        var file = e.File;
-        if (file is null)
-        {
-            return;
-        }
-
-        try
-        {
-            // Reject too-big files BEFORE opening the stream
-            if (file.Size > MaxScreenshotBytes)
-            {
-                Console.WriteLine($"Rejected upload over size limit: {file.Size} bytes");
-                return;
-            }
-
-            // Content-type whitelist
-            if (!AllowedImageTypes.Contains(file.ContentType))
-            {
-                Console.WriteLine($"Rejected upload with content type {file.ContentType}");
-                return;
-            }
-
-            using var stream = file.OpenReadStream(MaxScreenshotBytes);
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
-            var bytes = ms.ToArray();
-
-            _screenshotDataUrl =
-                $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
-        }
-        catch (Exception ex)
-        {
-            // Swallow the error so the circuit doesn't die
-            Console.WriteLine($"Screenshot upload failed: {ex}");
-            _screenshotDataUrl = null;
-        }
-    }
+    private string _notes = "";
+    private readonly List<Entry> _entries = new();
 
     private void AddEntry()
     {
-        // allow: note only, screenshot only, or both – but not completely empty
-        if (string.IsNullOrWhiteSpace(_newEntry.Notes) && _screenshotDataUrl is null)
-        {
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(_notes)) return;
 
-        _entries.Add(new JournalEntry
+        _entries.Add(new Entry
         {
             CreatedUtc = DateTime.UtcNow,
-            Notes = _newEntry.Notes?.Trim() ?? string.Empty,
-            ScreenshotDataUrl = _screenshotDataUrl
+            Notes = _notes.Trim()
         });
 
-        // reset
-        _newEntry = new JournalInput();
-        _screenshotDataUrl = null;
+        _notes = "";
     }
 
-    public class JournalInput
-    {
-        // optional for now – you can tighten later
-        public string? Notes { get; set; }
-    }
-
-    public class JournalEntry
+    private class Entry
     {
         public DateTime CreatedUtc { get; set; }
-        public string Notes { get; set; } = string.Empty;
-        public string? ScreenshotDataUrl { get; set; }
+        public string Notes { get; set; } = "";
     }
 }
