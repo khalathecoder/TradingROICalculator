@@ -2,11 +2,16 @@
 @rendermode InteractiveServer
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Components.Forms
+@using Blazored.TextEditor
+...
+<BlazoredTextEditor @ref="_editor" />
+
+
 
 <h3 class="text-center mb-3">SurePath Trading – Journal</h3>
 
 <div class="card p-4 mb-4 shadow-sm">
-    <EditForm Model="_newEntry" OnValidSubmit="AddEntry">
+    <EditForm Model="_newEntry" OnValidSubmit="AddEntryAsync">
         <DataAnnotationsValidator />
         <ValidationSummary />
 
@@ -58,9 +63,7 @@
 
         <div class="mb-3">
             <label class="form-label fw-bold">Notes</label>
-            <InputTextArea class="form-control"
-                           rows="4"
-                           @bind-Value="_newEntry.Notes" />
+            <BlazoredTextEditor @ref="_editor" />
         </div>
 
         <div class="mb-3">
@@ -112,9 +115,11 @@
                     </small>
                 </div>
 
-                @if (!string.IsNullOrWhiteSpace(e.Notes))
+                @if (!string.IsNullOrWhiteSpace(e.NotesHtml))
                 {
-                    <p class="mb-2">@e.Notes</p>
+                    <div class="mb-2">
+                        @((MarkupString)e.NotesHtml)
+                    </div>
                 }
 
                 @if (!string.IsNullOrEmpty(e.ScreenshotDataUrl))
@@ -136,6 +141,7 @@ else
     private readonly List<JournalEntry> _entries = new();
 
     private string? _screenshotDataUrl;
+    private BlazoredTextEditor _editor = default!;
 
     // --- "Config" lists (can move to JSON/service later) ---
 
@@ -156,33 +162,23 @@ else
     };
 
     private readonly List<string> _setups = new()
-{
-    // Single-bar conditions
-    "Inside bar (1)",
-    "Outside bar (3)",
-    "Inside day (1D)",
-    "Outside day (3D)",
-
-    // Basic 2-2 stuff
-    "2-2 continuation",
-    "2-2 reversal",
-
-    // Classic combos
-    "2-1-2 continuation",
-    "2-1-2 reversal",
-    "3-1-2 continuation",
-    "3-1-2 reversal",
-    "1-2-2 reversal",
-
-    // Contextual Strat ideas
-    "Failed 2 reversal",
-    "FTFC (full time frame continuity)",
-    "Broadening formation breakout",
-
-    // Catch-all
-    "Other (non-Strat)"
-};
-
+    {
+        "Inside bar (1)",
+        "Outside bar (3)",
+        "Inside day (1D)",
+        "Outside day (3D)",
+        "2-2 continuation",
+        "2-2 reversal",
+        "2-1-2 continuation",
+        "2-1-2 reversal",
+        "3-1-2 continuation",
+        "3-1-2 reversal",
+        "1-2-2 reversal",
+        "Failed 2 reversal",
+        "FTFC (full time frame continuity)",
+        "Broadening formation breakout",
+        "Other (non-Strat)"
+    };
 
     private readonly List<string> _moods = new()
     {
@@ -246,9 +242,12 @@ else
         }
     }
 
-    private void AddEntry()
+    // now async, pulling HTML from the editor
+    private async Task AddEntryAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newEntry.Notes) && _screenshotDataUrl is null)
+        var html = await _editor.GetHTML();
+
+        if (string.IsNullOrWhiteSpace(html) && _screenshotDataUrl is null)
         {
             // nothing to save
             return;
@@ -261,35 +260,34 @@ else
             InstrumentSymbol = _newEntry.InstrumentSymbol,
             Setup = _newEntry.Setup,
             Mood = _newEntry.Mood,
-            Notes = _newEntry.Notes?.Trim() ?? string.Empty,
+            NotesHtml = html ?? string.Empty,
             ScreenshotDataUrl = _screenshotDataUrl
         });
 
         // reset
         _newEntry = new JournalInput();
         _screenshotDataUrl = null;
+        await _editor.LoadHTMLContent(string.Empty);
+
     }
 
     public class JournalInput
     {
         public string Session { get; set; } = "New York";
         public string InstrumentSymbol { get; set; } = "MGC";
-        public string Setup { get; set; } = "Reversal";
+        public string Setup { get; set; } = "Inside bar (1)";
         public string Mood { get; set; } = "Calm";
-
-        public string? Notes { get; set; }
     }
 
     public class JournalEntry
     {
         public DateTime CreatedUtc { get; set; }
-
         public string Session { get; set; } = string.Empty;
         public string InstrumentSymbol { get; set; } = string.Empty;
         public string Setup { get; set; } = string.Empty;
         public string Mood { get; set; } = string.Empty;
 
-        public string Notes { get; set; } = string.Empty;
+        public string NotesHtml { get; set; } = string.Empty;
         public string? ScreenshotDataUrl { get; set; }
     }
 
