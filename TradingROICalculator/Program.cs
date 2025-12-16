@@ -1,10 +1,14 @@
 using TradingROICalculator.Components;
+using Blazored.TextEditor;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddBlazoredTextEditor();
 
 var app = builder.Build();
 
