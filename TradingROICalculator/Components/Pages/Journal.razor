@@ -2,68 +2,19 @@
 @rendermode InteractiveServer
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Components.Forms
-@using Blazored.TextEditor
-...
-<BlazoredTextEditor @ref="_editor" />
-
-
 
 <h3 class="text-center mb-3">SurePath Trading – Journal</h3>
 
-<div class="card p-4 mb-4 shadow-sm">
-    <EditForm Model="_newEntry" OnValidSubmit="AddEntryAsync">
+<div class="card p-4 mb-4">
+    <EditForm Model="_newEntry" OnValidSubmit="AddEntry">
         <DataAnnotationsValidator />
         <ValidationSummary />
 
-        <!-- Meta row: session / instrument / setup / mood -->
-        <div class="row">
-            <div class="col-md-3 mb-3">
-                <label class="form-label fw-bold">Session</label>
-                <InputSelect class="form-select" @bind-Value="_newEntry.Session">
-                    @foreach (var s in _sessions)
-                    {
-                        <option value="@s">@s</option>
-                    }
-                </InputSelect>
-            </div>
-
-            <div class="col-md-3 mb-3">
-                <label class="form-label fw-bold">Instrument</label>
-                <InputSelect class="form-select" @bind-Value="_newEntry.InstrumentSymbol">
-                    <option value="">(None)</option>
-                    @foreach (var inst in _instruments)
-                    {
-                        <option value="@inst.Symbol">
-                            @inst.Symbol – @inst.Description
-                        </option>
-                    }
-                </InputSelect>
-            </div>
-
-            <div class="col-md-3 mb-3">
-                <label class="form-label fw-bold">Setup</label>
-                <InputSelect class="form-select" @bind-Value="_newEntry.Setup">
-                    @foreach (var s in _setups)
-                    {
-                        <option value="@s">@s</option>
-                    }
-                </InputSelect>
-            </div>
-
-            <div class="col-md-3 mb-3">
-                <label class="form-label fw-bold">Mood</label>
-                <InputSelect class="form-select" @bind-Value="_newEntry.Mood">
-                    @foreach (var m in _moods)
-                    {
-                        <option value="@m">@m</option>
-                    }
-                </InputSelect>
-            </div>
-        </div>
-
         <div class="mb-3">
             <label class="form-label fw-bold">Notes</label>
-            <BlazoredTextEditor @ref="_editor" />
+            <InputTextArea class="form-control"
+                           rows="4"
+                           @bind-Value="_newEntry.Notes" />
         </div>
 
         <div class="mb-3">
@@ -92,35 +43,11 @@
     <div class="list-group">
         @foreach (var e in _entries.OrderByDescending(e => e.CreatedUtc))
         {
-            <div class="list-group-item mb-3 shadow-sm">
-                <div class="d-flex justify-content-between mb-1">
-                    <small class="text-muted">
-                        @e.CreatedUtc.ToLocalTime().ToString("g")
-                        @if (!string.IsNullOrWhiteSpace(e.Session))
-                        {
-                            @(" · " + e.Session)
-                        }
-                        @if (!string.IsNullOrWhiteSpace(e.InstrumentSymbol))
-                        {
-                            @(" · " + e.InstrumentSymbol)
-                        }
-                        @if (!string.IsNullOrWhiteSpace(e.Setup))
-                        {
-                            @(" · " + e.Setup)
-                        }
-                        @if (!string.IsNullOrWhiteSpace(e.Mood))
-                        {
-                            @(" · Mood: " + e.Mood)
-                        }
-                    </small>
+            <div class="list-group-item mb-2">
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted">@e.CreatedUtc.ToLocalTime().ToString("g")</small>
                 </div>
-
-                @if (!string.IsNullOrWhiteSpace(e.NotesHtml))
-                {
-                    <div class="mb-2">
-                        @((MarkupString)e.NotesHtml)
-                    </div>
-                }
+                <p class="mb-2">@e.Notes</p>
 
                 @if (!string.IsNullOrEmpty(e.ScreenshotDataUrl))
                 {
@@ -141,58 +68,6 @@ else
     private readonly List<JournalEntry> _entries = new();
 
     private string? _screenshotDataUrl;
-    private BlazoredTextEditor _editor = default!;
-
-    // --- "Config" lists (can move to JSON/service later) ---
-
-    private readonly List<string> _sessions = new()
-    {
-        "Asia",
-        "London",
-        "New York",
-        "Overnight"
-    };
-
-    private readonly List<InstrumentConfig> _instruments = new()
-    {
-        new("MGC", "Micro Gold Futures"),
-        new("GC",  "Gold Futures"),
-        new("ES",  "E-mini S&P 500"),
-        new("MES", "Micro E-mini S&P 500")
-    };
-
-    private readonly List<string> _setups = new()
-    {
-        "Inside bar (1)",
-        "Outside bar (3)",
-        "Inside day (1D)",
-        "Outside day (3D)",
-        "2-2 continuation",
-        "2-2 reversal",
-        "2-1-2 continuation",
-        "2-1-2 reversal",
-        "3-1-2 continuation",
-        "3-1-2 reversal",
-        "1-2-2 reversal",
-        "Failed 2 reversal",
-        "FTFC (full time frame continuity)",
-        "Broadening formation breakout",
-        "Other (non-Strat)"
-    };
-
-    private readonly List<string> _moods = new()
-    {
-        "Calm",
-        "Focused",
-        "Confident",
-        "Rushed",
-        "Tilted",
-        "Bored",
-        "Greedy",
-        "Done for the day"
-    };
-
-    // --- Screenshot upload hardening ---
 
     private static readonly string[] AllowedImageTypes =
     {
@@ -215,12 +90,14 @@ else
 
         try
         {
+            // Reject too-big files BEFORE opening the stream
             if (file.Size > MaxScreenshotBytes)
             {
                 Console.WriteLine($"Rejected upload over size limit: {file.Size} bytes");
                 return;
             }
 
+            // Content-type whitelist
             if (!AllowedImageTypes.Contains(file.ContentType))
             {
                 Console.WriteLine($"Rejected upload with content type {file.ContentType}");
@@ -237,59 +114,42 @@ else
         }
         catch (Exception ex)
         {
+            // Swallow the error so the circuit doesn't die
             Console.WriteLine($"Screenshot upload failed: {ex}");
             _screenshotDataUrl = null;
         }
     }
 
-    // now async, pulling HTML from the editor
-    private async Task AddEntryAsync()
+    private void AddEntry()
     {
-        var html = await _editor.GetHTML();
-
-        if (string.IsNullOrWhiteSpace(html) && _screenshotDataUrl is null)
+        // allow: note only, screenshot only, or both – but not completely empty
+        if (string.IsNullOrWhiteSpace(_newEntry.Notes) && _screenshotDataUrl is null)
         {
-            // nothing to save
             return;
         }
 
         _entries.Add(new JournalEntry
         {
             CreatedUtc = DateTime.UtcNow,
-            Session = _newEntry.Session,
-            InstrumentSymbol = _newEntry.InstrumentSymbol,
-            Setup = _newEntry.Setup,
-            Mood = _newEntry.Mood,
-            NotesHtml = html ?? string.Empty,
+            Notes = _newEntry.Notes?.Trim() ?? string.Empty,
             ScreenshotDataUrl = _screenshotDataUrl
         });
 
         // reset
         _newEntry = new JournalInput();
         _screenshotDataUrl = null;
-        await _editor.LoadHTMLContent(string.Empty);
-
     }
 
     public class JournalInput
     {
-        public string Session { get; set; } = "New York";
-        public string InstrumentSymbol { get; set; } = "MGC";
-        public string Setup { get; set; } = "Inside bar (1)";
-        public string Mood { get; set; } = "Calm";
+        // optional for now – you can tighten later
+        public string? Notes { get; set; }
     }
 
     public class JournalEntry
     {
         public DateTime CreatedUtc { get; set; }
-        public string Session { get; set; } = string.Empty;
-        public string InstrumentSymbol { get; set; } = string.Empty;
-        public string Setup { get; set; } = string.Empty;
-        public string Mood { get; set; } = string.Empty;
-
-        public string NotesHtml { get; set; } = string.Empty;
+        public string Notes { get; set; } = string.Empty;
         public string? ScreenshotDataUrl { get; set; }
     }
-
-    public record InstrumentConfig(string Symbol, string Description);
 }
